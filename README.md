@@ -1,4 +1,4 @@
-![Screenshot](README.jpg)
+[![](README.jpg)](https://bacionejs.github.io/sweetandsari/autofake.html)
 
 ## Purpose
 Sweet and Sari is an RMS Retail Management System for a school project which includes inventory management, point of sale and reports. It is written in plain JavaScript and can run offline from the Android file manager in the Chrome browser
