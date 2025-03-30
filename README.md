@@ -1,3 +1,5 @@
+![Screenshot](README.jpg)
+
 ## Purpose
 Sweet and Sari is an RMS Retail Management System for a school project which includes inventory management, point of sale and reports. It is written in plain JavaScript and can run offline from the Android file manager in the Chrome browser
 
