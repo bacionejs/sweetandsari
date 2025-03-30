@@ -118,7 +118,12 @@ type: type,
 timestamp: timestamp
 });
 }
-//tx.oncomplete = () => alert('500 transactions generated.');
+tx.oncomplete = () =>{
+  //alert('500 transactions generated.');
+  
+setTimeout(()=>{window.location.href='sweetandsari.html'},3000);
+
+}
 }
 function generateRandomTimestamp() {
 const now = new Date();
