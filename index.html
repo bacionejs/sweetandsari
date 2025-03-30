@@ -1,0 +1,550 @@
+<html> <script>
+
+
+onload=() => {
+
+window.onerror=(msg,_,line,col,error)=>{
+prompt("",`Error: ${msg} at ${line}:${col}`+error);
+return true;
+};
+
+const DB_NAME = 'bacionejs.sweetandsari';
+const STORE = 'inventory';
+const LOG = 'transactions';
+let cart = {};
+let db;
+
+function element(tag,parent,id,text,listener){
+let e;
+if(parent) e=parent.appendChild(document.createElement(tag));
+else       e=document.body.appendChild(document.createElement(tag));
+if(id)e.id=id;
+if(text)e.textContent=text;
+if(listener)e.addEventListener('click',listener);
+return e;
+}
+
+element("style").textContent=`
+body {
+  background-color: #3e2723; /* Dark chocolate background */
+  color: #efebe9; /* Light cocoa text */
+  font-family: 'Arial', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+#banner {
+  height: 20px;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><path d="M0 10 Q10 -5, 20 10 T40 10 T60 10 T80 10 T100 10 V20 H0 Z" fill="%23795548"/><path d="M0 10 Q10 25, 20 10 T40 10 T60 10 T80 10 T100 10 V20 H0 Z" fill="%23a1887f"/></svg>') repeat-x;
+}
+button {
+  background-color: #6d4c41;
+  color: #efebe9;
+  border: none;
+  padding: 5px 10px;
+}
+button.active {
+  background-color: #8d6e63;
+  color: #fff8e1;
+}
+.tab {
+  padding: 5px 10px;
+  background-color: #8d6e63;
+  color: #fff8e1;
+  display:none;
+}
+.tab.active {
+  display: block;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  padding: 8px;
+  border: 1px solid #4e342e;
+}
+th {
+  background-color: #795548;
+  color: #fff8e1;
+}
+input {
+  padding: 5px;
+  border: 1px solid #4e342e;
+  border-radius: 3px;
+  background-color: #efebe9;
+  color: #3e2723;
+}
+.small-btn {
+  background-color: #a1887f;
+  color: #3e2723;
+  padding: 3px 6px;
+  border-radius: 3px;
+}
+`;
+
+element("div").id = "banner";
+const con = element('div');
+document.title                = 'Sweet & Sari';
+element('h2',con).textContent = 'Sweet & Sari';
+createtabs(con);
+initDB();
+
+function initDB() {
+const request = indexedDB.open(DB_NAME);
+request.onupgradeneeded = e => {
+  db = e.target.result;
+  if (!db.objectStoreNames.contains(STORE)) {
+    db.createObjectStore(STORE, { keyPath: 'name' });
+  }
+  if (!db.objectStoreNames.contains(LOG)) {
+    db.createObjectStore(LOG, { autoIncrement: true });
+  }
+};
+request.onsuccess = e => {
+  db = e.target.result;
+  showMaster("Buy");
+};
+request.onerror = () => alert('Error loading database.');
+}
+
+function createtabs(parent) {
+let buttons=element('div',parent,"MasterButtons");
+let tabs=element('div',parent,"MasterTabs");
+['Buy', 'Sell', 'Reports'].forEach(tab => { element('button',buttons,tab+"btn",tab,() => showMaster(tab)); });
+createBuyTable(tabs);
+createSellTable(tabs);
+element('div',tabs,"Reports").className = 'tab';
+}
+
+function toggle(parent,r){
+document.querySelectorAll('#'+parent+'Buttons button').forEach(el => el.classList.remove('active'));
+document.querySelectorAll('#'+parent+'Tabs div').forEach(el => el.classList.remove('active'));
+document.getElementById(r + 'btn').classList.add('active');
+document.getElementById(r).classList.add('active');
+}
+
+function showMaster(tab) {
+toggle("Master",tab);
+if (tab === 'Buy') loadBuy();
+if (tab === 'Sell') loadSell();
+if (tab === 'Reports')createReports(document.getElementById('Reports'));
+}
+
+function createTable(parent,id,headers){
+const container=element('div',parent);
+container.style.maxHeight='50vh';
+container.style.overflowY='auto';
+container.style.border='1px solid #ccc';
+container.style.position='relative';
+const table=element('table',container,id);
+table.style.width='100%';
+table.style.borderCollapse='collapse';
+table.style.position='relative';
+const thead=element('thead',table);
+thead.style.position='sticky';
+thead.style.top='0';
+thead.style.backgroundColor='#f1f1f1';
+thead.style.zIndex='10';
+const headerRow=element('tr',thead);
+headers.forEach(v=>{element('th',headerRow).textContent=v;});
+createfilter(table);
+const stockIndex=[...headerRow.children].findIndex(th=>th.textContent==='Stock');
+if(stockIndex!==-1){
+const stockTh=headerRow.children[stockIndex];
+stockTh.style.cursor='pointer';
+stockTh.innerHTML='Stock &#x25B2;';
+let ascending=true;
+stockTh.onclick=()=>{
+sortTable(table,stockIndex,ascending);
+stockTh.innerHTML=ascending?'Stock &#x25BC;':'Stock &#x25B2;';
+ascending=!ascending;
+};
+}
+element('tbody',table);
+return table;
+}
+
+function sortTable(table,col,ascending){
+const tbody=table.querySelector('tbody');
+[...tbody.children].sort((a,b)=>{
+let valA=parseFloat(a.children[col].textContent)||0;
+let valB=parseFloat(b.children[col].textContent)||0;
+return ascending?valA-valB:valB-valA;
+}).forEach(row=>tbody.appendChild(row));
+}
+
+function createfilter(table){
+const thead=table.querySelector('thead');
+const headerRow=thead.querySelector('tr');
+const itemIndex=[...headerRow.children].findIndex(th=>th.textContent==='Item');
+if(itemIndex==-1)return;
+const itemTh=headerRow.children[itemIndex];
+itemTh.textContent="";
+const input=element('input',itemTh);
+input.placeholder='Item Filter';
+input.oninput=()=>filter(table,itemIndex,input.value.toLowerCase());
+}
+
+function filter(table,col,value){
+const tbody=table.querySelector('tbody');
+[...tbody.children].forEach(tr=>{let cell=tr.children[col].textContent.toLowerCase();tr.style.display=cell.includes(value)?"":"none";});
+}
+
+function createBuyTable(parent){
+const tab=element('div',parent,'Buy');tab.className='tab';
+const summary=element('h5',tab);
+summary.innerHTML='Current Inventory Cost: <span id="buyTotalCost">0.00</span><br>Potential Profit: <span id="buyDiff">0.00</span>';
+createTable(tab,'buyTable',['Item','Cost','Price','Stock','Qty','']);
+const btnContainer=element('div',tab);
+btnContainer.style.display='flex';btnContainer.style.flexWrap='wrap';btnContainer.style.gap='5px';
+['newItemName','newItemCost','newItemPrice','newItemStock'].forEach(id=>{const input=element('input',btnContainer,id);input.placeholder=id.replace('newItem','');input.style.flex='1';input.style.minWidth='100px';});
+element('button',btnContainer,'','New',addNewItem);
+}
+
+function addNewItem(){
+const name=document.getElementById('newItemName').value.trim();
+const cost=parseFloat(document.getElementById('newItemCost').value);
+const price=parseFloat(document.getElementById('newItemPrice').value);
+const stock=parseInt(document.getElementById('newItemStock').value);
+if(!name||isNaN(cost)||isNaN(price)||isNaN(stock)){
+alert('Invalid input. Please check values.');
+return;
+}
+const store=db.transaction(STORE,'readwrite').objectStore(STORE);
+store.add({name,cost,price,stock}).onsuccess=()=>{
+logTransaction(name,cost,price,stock,'buy');
+loadBuy();
+['newItemName','newItemCost','newItemPrice','newItemStock'].forEach(id=>{document.getElementById(id).value='';});
+const totalCost=parseFloat(document.querySelector('#buyTotalCost').textContent)||0;
+const potentialProfit=parseFloat(document.querySelector('#buyDiff').textContent)||0;
+document.querySelector('#buyTotalCost').textContent=(totalCost+cost*stock).toFixed(2);
+document.querySelector('#buyDiff').textContent=(potentialProfit+(price-cost)*stock).toFixed(2);
+};
+}
+
+function createSellTable(parent) {
+const tab = element('div',parent,"Sell");
+tab.className = 'tab';
+createTable(tab,'sellTable',['Item', 'Price', 'Stock', 'Qty', 'Subtotal']);
+const summary = element('h3',tab);
+summary.innerHTML = 'Total: $<span id="totalPrice">0.00</span> | Items: <span id="totalItems">0</span>';
+element('button',tab,"",'Process Sale',processSale);
+const form = element('div',tab,'paymentForm');
+element('h3',form).textContent = 'Payment Form';
+createTable(form,'paymentSummary',['Name', 'Qty', 'Price', 'Subtotal']);
+element('h3',form).innerHTML = 'Total: $<span id="summaryTotalPrice">0.00</span> | Items: <span id="summaryTotalItems">0</span>';
+element('button',form,"",'Submit Payment',processPayment);
+form.appendChild(document.createTextNode(' '));
+element('button',form,"",'Cancel',cancelPayment);
+}
+
+function loadBuy() {
+const store = db.transaction(STORE, 'readonly').objectStore(STORE);
+const tbody = document.querySelector('#buyTable tbody');
+tbody.innerHTML = '';
+let totalCost = 0, totalPrice = 0;
+store.openCursor().onsuccess = e => {
+  const cursor = e.target.result;
+  if (cursor) {
+    const item = cursor.value;
+    buyRow(item, tbody);
+    totalCost += item.cost * item.stock;
+    totalPrice += item.price * item.stock;
+    cursor.continue();
+  } else {
+    document.getElementById('buyTotalCost').textContent = totalCost.toFixed(2);
+    document.getElementById('buyDiff').textContent = (totalPrice - totalCost).toFixed(2);
+  }
+};
+}
+
+function buyRow(item, parent) {
+const row = element('tr',parent);
+['name', 'cost', 'price', 'stock'].forEach(field => {
+  const td = element('td',row,"",item[field]);
+  td.contentEditable = true;
+  td.addEventListener('blur', () => updateItem(item.name, field, td.textContent));
+});
+const qtyTd = element('td',row);
+const minusBtn = element('button',qtyTd,"","-");
+minusBtn.className = 'small-btn';
+minusBtn.addEventListener('click',() => adjustBuyQty(item.name,-1));
+const qtyInput = element('input',qtyTd,`addQty-${item.name}`);
+qtyInput.type = 'number';
+qtyInput.style.width = '3ch';
+qtyInput.value = 0;
+const plusBtn = element('button',qtyTd,"","+");
+plusBtn.className = 'small-btn';
+plusBtn.addEventListener('click',() => adjustBuyQty(item.name,1));
+const buyButton = element('button',element('td',row),"",'Add',() => addStock(item.name,parseInt(qtyInput.value || 0)));
+buyButton.className = 'small-btn';
+}
+
+function adjustBuyQty(name,change) {
+const input = document.getElementById(`addQty-${name}`);
+let value = parseInt(input.value || 0) + change;
+if (value < 0) value = 0;
+input.value = value;
+}
+
+function updateItem(name, field, value) {
+const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
+store.get(name).onsuccess = e => {
+  const item = e.target.result;
+  if (item) {
+    item[field] = field === 'name' ? value : parseFloat(value);
+    if (field === 'name') {
+      store.delete(name);
+      item.name = value;
+    }
+    store.put(item);
+  }
+};
+}
+
+function addStock(name, qty) {
+if (isNaN(qty) || qty==0) { alert('Please enter a valid quantity to add.'); return; }
+const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
+store.get(name).onsuccess = e => {
+  const item = e.target.result;
+  if (item) {
+    item.stock += qty;
+    store.put(item).onsuccess = () => {
+      logTransaction(item.name, item.cost, item.price, qty, 'buy');
+      loadBuy();
+    };
+  }
+};
+}
+
+function loadSell() {
+const store = db.transaction(STORE, 'readonly').objectStore(STORE);
+const tbody = document.querySelector('#sellTable tbody');
+document.getElementById('paymentForm').style.display = 'none';
+tbody.innerHTML = '';
+store.openCursor().onsuccess = e => { const cursor = e.target.result; if (cursor) {
+  sellRow(cursor.value, tbody);
+  cursor.continue();
+} };
+}
+
+function sellRow(item, parent) {
+const row=element('tr',parent);
+['name','price','stock'].forEach(field=>element('td',row,"",item[field]));
+const td=element('td',row);
+const minus=element('button',td,"","-",()=>adjustSellQty(item.name,-1));
+minus.className='small-btn';
+const input=element('input',td,`sellQty-${item.name}`);
+input.type='number';
+input.value=0;
+input.min=0;
+input.max=item.stock;
+input.style.width='3ch';
+input.addEventListener('input',()=>updateSell(item.name,parseInt(input.value)));
+const plus=element('button',td,"","+",()=>adjustSellQty(item.name,1));
+plus.className='small-btn';
+element('td',row,`subtotal-${item.name}`,'0.00');
+}
+
+function adjustSellQty(name,change){
+const input=document.getElementById(`sellQty-${name}`);
+let newQty=parseInt(input.value||0)+change;
+if(newQty<0)newQty=0;
+if(newQty>parseInt(input.max))newQty=parseInt(input.max);
+input.value=newQty;
+updateSell(name,newQty);
+}
+
+function updateSell(name, qty) {
+const store = db.transaction(STORE, 'readonly').objectStore(STORE);
+store.get(name).onsuccess = e => { const item = e.target.result; if (item) {
+  const subtotal = qty * item.price;
+  document.getElementById(`subtotal-${name}`).textContent = subtotal.toFixed(2);
+  if (qty > 0) {
+    cart[name] = { name, qty, price: item.price, subtotal };
+  } else {
+    delete cart[name];
+  }
+  updateSellSummary();
+} };
+}
+
+function updateSellSummary() {
+let totalItems = 0;
+let totalPrice = 0;
+Object.values(cart).forEach(item => {
+  totalItems += item.qty;
+  totalPrice += item.subtotal;
+});
+document.getElementById('totalPrice').textContent = totalPrice.toFixed(2);
+document.getElementById('totalItems').textContent = totalItems;
+}
+
+function processSale() {
+if (Object.keys(cart).length === 0) { alert('No items in the cart.'); return; }
+document.getElementById('paymentForm').style.display = 'block';
+const tbody = document.querySelector('#paymentSummary tbody');
+tbody.innerHTML = '';
+Object.values(cart).forEach(item => {
+  const row = element('tr',tbody);
+  ['name', 'qty', 'price', 'subtotal'].forEach(field => { element('td',row,"",field === 'subtotal' ? item[field].toFixed(2) : item[field]); });
+});
+document.getElementById('summaryTotalPrice').textContent = document.getElementById('totalPrice').textContent;
+document.getElementById('summaryTotalItems').textContent = document.getElementById('totalItems').textContent;
+}
+
+function processPayment() {
+const tx = db.transaction(STORE, 'readwrite');
+const store = tx.objectStore(STORE);
+Object.values(cart).forEach(item => { store.get(item.name).onsuccess = e => {
+  const dbItem = e.target.result;
+  if (dbItem) {
+    dbItem.stock -= item.qty;
+    store.put(dbItem);
+    logTransaction(item.name, dbItem.cost, item.price, item.qty, 'sell');
+  }
+}; });
+tx.oncomplete = () => {
+  cart = {};
+  document.getElementById('paymentForm').style.display = 'none';
+  loadSell();
+  updateSellSummary();
+};
+}
+
+function cancelPayment() {
+document.getElementById('paymentForm').style.display = 'none';
+cart = {};
+updateSellSummary();
+}
+
+function logTransaction(item,cost,price,quantity,type){
+const store=db.transaction(LOG,'readwrite').objectStore(LOG);
+let time=new Date();
+const timestamp="FullYear Month Date Hours Minutes Seconds".split(" ").reduce((s,i)=>s+((time["get"+i]()+(i=="Month")).toString().padStart(2,"0")),"");
+store.add({
+  item,
+  cost,
+  price,
+  quantity,
+  type,
+  timestamp
+});
+}
+
+function loadData(){
+return new Promise((resolve,reject)=>{
+const store=db.transaction(LOG,'readonly').objectStore(LOG);
+const data=[];
+store.openCursor().onsuccess=e=>{
+const cursor=e.target.result;
+if(cursor){
+  const t=cursor.value;
+  const ts=t.timestamp.toString();
+  data.push({timestamp:ts,all:"",year:ts.slice(0,4),month:ts.slice(4,6),day:ts.slice(6,8),item:t.item,cost:t.cost,price:t.price,quantity:t.quantity,type:t.type});
+  cursor.continue();
+}else{
+  resolve(data);
+}};
+store.openCursor().onerror=e=>reject(e);
+});
+}
+
+function createReports(parent) {
+parent.innerHTML = "";
+const buttons = element('div', parent, 'ReportButtons');
+const tabs = element('div', parent, 'ReportTabs');
+['Transactions', 'Items', 'Summary', 'Yearly', 'Monthly', 'Daily'].forEach(tab => { element('button', buttons, tab + 'btn', tab, () => showReport(tab)); });
+['Transactions', 'Items', 'Summary', 'Yearly', 'Monthly', 'Daily'].forEach(tab => { element('div', tabs, tab, "").className = 'tab'; });
+showReport('Transactions');
+}
+
+function transactions(parent,data){
+if(!data.length)return;
+const table=createTable(parent,'transactionsTable',['Item','Time','Amount']);
+const tbody=table.querySelector('tbody');
+data.sort((a,b)=>b.timestamp-a.timestamp);
+data.forEach(t=>{
+const row=element('tr',tbody);
+const time=t.timestamp.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1-$2-$3 $4:$5:$6');
+const amount=(t.type==='buy')?(-t.cost*t.quantity).toFixed(2):(t.price*t.quantity).toFixed(2);
+element('td',row,null,t.item);
+element('td',row,null,time);
+element('td',row,null,amount).style.color=amount<0?'red':'green';
+});
+}
+
+function showReport(tab) {
+let e=document.getElementById(tab);
+e.innerHTML="";
+loadData().then(data=>{
+  if(tab==='Transactions') transactions(e,data);
+  if(tab==='Items')     group(e,data,['Item','Buy','Sell','Profit'],['item']);
+  if(tab==='Summary')   group(e,data,['', 'Buy','Sell','Profit'],['all']);
+  if(tab==='Yearly')    group(e,data,[' ','Buy','Sell','Profit'],['year']);
+  if(tab==='Monthly')   group(e,data,[' ','Buy','Sell','Profit'],['year','month']);
+  if(tab==='Daily')     group(e,data,[' ','Buy','Sell','Profit'],['year','month','day']);
+}).catch(err=>{console.error('Error loading data:',err);});
+toggle("Report",tab)
+}
+
+function group(parent,data,headers,groupKeys){
+const table=element('table',parent);
+table.style.height='50vh';
+table.style.overflowY='auto';
+table.style.display='block';
+const thead=element('thead',table);
+const headerRow=element('tr',thead);
+headers.forEach(v=>{if(v)element('th',headerRow,null,v);});
+const itemIndex=[...headerRow.children].findIndex(th=>th.textContent==='Item');
+if(itemIndex!==-1){
+const itemTh=headerRow.children[itemIndex];
+itemTh.textContent='';
+const input=element('input',itemTh);
+input.placeholder='Item Filter';
+input.oninput=()=>filter(table,itemIndex,input.value.toLowerCase());
+}
+const tbody=element('tbody',table);
+const grouped=by(data,groupKeys);
+const rows=[];
+function processGroup(grouped,keys,prefix=''){
+for(const key in grouped){
+const current=grouped[key];
+if(Array.isArray(current)){
+rows.push(sum(current,prefix+key));
+}else{
+processGroup(current,keys.slice(1),prefix+key+'-');
+}
+}
+}
+processGroup(grouped,groupKeys);
+rows.sort((a,b)=>b[0]<a[0]?-1:1);
+rows.forEach(rowData=>{
+const row=element('tr',tbody);
+rowData.forEach(v=>{if(v)element('td',row,null,v);});
+});
+}
+
+function by(array,keys){
+return array.reduce((acc,obj)=>{
+  let nested=acc;
+  for(let i=0;i<keys.length;i++){
+    const key=keys[i];
+    const val=obj[key].toString();
+    nested=nested[val]||(nested[val]=i===keys.length-1?[]:{});
+  }
+  nested.push(obj);
+  return acc;
+},{});
+}
+
+function sum(data,label){
+let buySum=0,sellSum=0;
+for(const t of data){if(t.type==='buy')buySum+=t.cost*t.quantity;else sellSum+=t.price*t.quantity;}
+return [label,buySum.toFixed(2),sellSum.toFixed(2),(sellSum-buySum).toFixed(2)];
+}
+
+
+}
+</script> </html>
