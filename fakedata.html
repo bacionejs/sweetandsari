@@ -118,9 +118,15 @@ type: type,
 timestamp: timestamp
 });
 }
-tx.oncomplete = () =>{
-  //alert('500 transactions generated.');
-}
+tx.oncomplete=()=>{
+ let msg=document.getElementById('message');
+ if(!msg){
+  msg=document.createElement('p');
+  msg.id='message';
+  document.body.appendChild(msg);
+ }
+ msg.textContent='Generated 50 inventory items and 500 transactions.';
+};
 }
 function generateRandomTimestamp() {
 const now = new Date();
@@ -147,6 +153,6 @@ if(urlParams.get('redirect')==='true'){
 
 </head>
 <body>
-<h2>Generating data...</h2>
+<h2>Generating fake data...</h2>
 </body>
 </html>
