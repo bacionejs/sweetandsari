@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Generate Transactions</title>
+<script>
+const DB_NAME = 'bacionejs.sweetandsari';
+const TRANSACTIONS_STORE = 'transactions';
+const INVENTORY_STORE = 'inventory';
+const LOG_STORE = 'log';
+
+//const initialData=Array.from({length:50},(_,i)=>({name:`Chocolate ${i+1}`,cost:1+(i%5)*0.1,price:1.5+(i%5)*0.5,stock:50+((i*10)%100)}));
+const initialData=[
+{name:"Milk Chocolate Bar",cost:1,price:1.5,stock:50},
+{name:"Dark Chocolate Bar",cost:1.1,price:2,stock:60},
+{name:"White Chocolate Bar",cost:1.2,price:2.2,stock:70},
+{name:"Chocolate Truffles",cost:1.5,price:2.8,stock:55},
+{name:"Chocolate Covered Almonds",cost:1.3,price:2.5,stock:45},
+{name:"Hazelnut Praline",cost:1.4,price:2.7,stock:65},
+{name:"Peanut Butter Cups",cost:1,price:1.8,stock:80},
+{name:"Mint Chocolate",cost:1.2,price:2,stock:75},
+{name:"Chocolate Fudge",cost:1.3,price:2.3,stock:50},
+{name:"Chocolate Chip Cookies",cost:1.1,price:2,stock:60},
+{name:"Gummy Bears",cost:0.8,price:1.5,stock:90},
+{name:"Sour Gummies",cost:0.9,price:1.6,stock:85},
+{name:"Licorice Twists",cost:1,price:1.7,stock:70},
+{name:"Jelly Beans",cost:0.7,price:1.4,stock:95},
+{name:"Cotton Candy",cost:1.3,price:2.1,stock:40},
+{name:"Marshmallows",cost:0.9,price:1.6,stock:75},
+{name:"Lollipops",cost:0.8,price:1.5,stock:85},
+{name:"Candy Canes",cost:0.7,price:1.4,stock:90},
+{name:"Caramel Chews",cost:1,price:1.8,stock:50},
+{name:"Butterscotch",cost:1.1,price:2,stock:60},
+{name:"Nougat Bar",cost:1.4,price:2.5,stock:55},
+{name:"Honeycomb Candy",cost:1.2,price:2,stock:65},
+{name:"Fruit Flavored Gummies",cost:0.9,price:1.5,stock:70},
+{name:"Chocolate Brownies",cost:1.5,price:3,stock:45},
+{name:"Cream-Filled Donut",cost:1.3,price:2.5,stock:50},
+{name:"Glazed Donut",cost:1.1,price:2,stock:60},
+{name:"Cinnamon Roll",cost:1.4,price:2.7,stock:55},
+{name:"Vanilla Cupcake",cost:1.2,price:2.3,stock:70},
+{name:"Chocolate Cupcake",cost:1.3,price:2.5,stock:65},
+{name:"Carrot Cake Slice",cost:1.4,price:2.8,stock:50},
+{name:"Red Velvet Cake Slice",cost:1.5,price:3,stock:55},
+{name:"Lemon Tart",cost:1.2,price:2.4,stock:60},
+{name:"Chocolate Tart",cost:1.3,price:2.5,stock:65},
+{name:"Macarons",cost:1.5,price:3.2,stock:45},
+{name:"Eclairs",cost:1.4,price:2.8,stock:55},
+{name:"Apple Pie Slice",cost:1.3,price:2.5,stock:50},
+{name:"Cherry Pie Slice",cost:1.4,price:2.7,stock:55},
+{name:"Hot Chocolate",cost:1.2,price:2.5,stock:70},
+{name:"Espresso",cost:1,price:2,stock:80},
+{name:"Cappuccino",cost:1.3,price:2.8,stock:60},
+{name:"Latte",cost:1.2,price:2.6,stock:75},
+{name:"Americano",cost:1.1,price:2.3,stock:85},
+{name:"Mocha",cost:1.4,price:3,stock:50},
+{name:"Iced Coffee",cost:1.3,price:2.7,stock:65},
+{name:"Chai Latte",cost:1.2,price:2.5,stock:70},
+{name:"Milkshake",cost:1.5,price:3.2,stock:55},
+{name:"Bubble Tea",cost:1.6,price:3.5,stock:50},
+{name:"Smoothie",cost:1.4,price:3,stock:60},
+{name:"Hot Cocoa",cost:1.2,price:2.5,stock:75},
+{name:"Affogato",cost:1.3,price:2.8,stock:55}
+];
+
+let db;
+document.addEventListener('DOMContentLoaded', () => {
+clearDB().then(() => initDB());
+});
+function clearDB() {
+return new Promise((resolve, reject) => {
+const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+deleteRequest.onsuccess = () => resolve();
+deleteRequest.onerror = () => {
+alert('Error deleting database.');
+reject();
+};
+deleteRequest.onblocked = () => {
+alert('Database deletion blocked. Close all connections and try again.');
+reject();
+};
+});
+}
+function initDB() {
+const request = indexedDB.open(DB_NAME);
+request.onupgradeneeded = e => {
+db = e.target.result;
+if (!db.objectStoreNames.contains(INVENTORY_STORE)) {
+const store = db.createObjectStore(INVENTORY_STORE, {keyPath: 'name'});
+initialData.forEach(item => store.add(item));
+}
+if (!db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
+db.createObjectStore(TRANSACTIONS_STORE, {autoIncrement: true});
+}
+if (!db.objectStoreNames.contains(LOG_STORE)) {
+db.createObjectStore(LOG_STORE, {autoIncrement: true});
+}
+};
+request.onsuccess = e => {
+db = e.target.result;
+generateTransactions();
+};
+request.onerror = () => alert('Error opening database.');
+}
+function generateTransactions() {
+const tx = db.transaction(TRANSACTIONS_STORE, 'readwrite');
+const store = tx.objectStore(TRANSACTIONS_STORE);
+for (let i = 0; i < 500; i++) {
+const item = initialData[Math.floor(Math.random() * initialData.length)];
+const qty = Math.floor(Math.random() * 10) + 1;
+const type = Math.random() < 0.5 ? 'buy' : 'sell';
+const timestamp = generateRandomTimestamp();
+store.add({
+item: item.name,
+cost: item.cost,
+price: item.price,
+quantity: qty,
+type: type,
+timestamp: timestamp
+});
+}
+tx.oncomplete = () => alert('500 transactions generated.');
+}
+function generateRandomTimestamp() {
+const now = new Date();
+const pastDate = new Date(now);
+pastDate.setFullYear(now.getFullYear() - 3);
+const randomTime = pastDate.getTime() + Math.random() * (now.getTime() - pastDate.getTime());
+const date = new Date(randomTime);
+const year = date.getFullYear();
+const month = String(date.getMonth() + 1).padStart(2, '0');
+const day = String(date.getDate()).padStart(2, '0');
+const hours = String(date.getHours()).padStart(2, '0');
+const minutes = String(date.getMinutes()).padStart(2, '0');
+const seconds = String(date.getSeconds()).padStart(2, '0');
+return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+</script>
+</head>
+<body>
+<h2>Transaction Generator</h2>
+</body>
+</html>
