@@ -108,7 +108,7 @@ request.onsuccess = e => {
 request.onerror = () => alert('Error loading database.');
 }
 
-function createtabs(parent) {
+function createtabs2(parent) {
 let buttons=element('div',parent,"MasterButtons");
 let tabs=element('div',parent,"MasterTabs");
 ['Buy', 'Sell', 'Reports'].forEach(tab => { element('button',buttons,tab+"btn",tab,() => showMaster(tab)); });
@@ -116,6 +116,40 @@ createBuyTable(tabs);
 createSellTable(tabs);
 element('div',tabs,"Reports").className = 'tab';
 }
+
+
+
+
+
+function createtabs(parent){
+ let buttons=element('div',parent,'MasterButtons');
+ let tabs=element('div',parent,'MasterTabs');
+ ['Buy','Sell','Reports','Database'].forEach(tab=>{element('button',buttons,tab+'btn',tab,()=>showMaster(tab));});
+ createBuyTable(tabs);
+ createSellTable(tabs);
+ element('div',tabs,'Reports').className='tab';
+ let dbTab=element('div',tabs,'Database');
+ dbTab.className='tab';
+ element('p',dbTab,null,'Warning: This will clear all data from Sweet and Sari.');
+ element('button',dbTab,null,'Clear Data',clearStores);
+}
+function clearStores(){
+ const req=indexedDB.open('bacionejs.sweetandsari');
+ req.onsuccess=(e)=>{
+  const db=e.target.result;
+  const tx=db.transaction(['inventory','transactions'],'readwrite');
+  const invStore=tx.objectStore('inventory');
+  const txnStore=tx.objectStore('transactions');
+  invStore.clear().onsuccess=()=>console.log('inventory cleared.');
+  txnStore.clear().onsuccess=()=>console.log('transactions cleared.');
+  tx.oncomplete=()=>alert('Data cleared successfully.');
+ };
+ req.onerror=()=>alert('Error opening database.');
+ req.onupgradeneeded=()=>alert('Database not found.');
+}
+
+
+
 
 function toggle(parent,r){
 document.querySelectorAll('#'+parent+'Buttons button').forEach(el => el.classList.remove('active'));
