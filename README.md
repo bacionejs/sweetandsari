@@ -1,12 +1,8 @@
-
+## Demo
 [![](README.jpg)](https://bacionejs.github.io/sweetandsari/fakedata.html?redirect=true)
 
 ## Purpose
 Sweet and Sari is an RMS Retail Management System for a school project which includes inventory management, point of sale and reports. It is written in plain JavaScript and can run offline from the Android file manager in the Chrome browser
-
-## Demo
-- [Generate fake data](https://bacionejs.github.io/sweetandsari/fakedata.html)
-- [Run App](https://bacionejs.github.io/sweetandsari/sweetandsari.html)
 
 ## Installation
 - Download [sweetandsari.html](https://raw.githubusercontent.com/bacionejs/sweetandsari/main/sweetandsari.html)
