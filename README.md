@@ -2,5 +2,6 @@
 Sweet and Sari is an RMS Retail Managment System 
 
 ## Demo
-- [Generate fake data](fakedata.html)
-- [Run App](index.html)
+bacionejs.github.io
+- [Generate fake data](bacionejs.github.io/fakedata.html)
+- [Run App](bacionejs.github.io/index.html)
