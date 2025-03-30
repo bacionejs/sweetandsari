@@ -3,7 +3,7 @@ Sweet and Sari is an RMS Retail Management System for a school project which inc
 
 ## Demo
 - [Generate fake data](https://bacionejs.github.io/sweetandsari/fakedata.html)
-- [Run App](https://bacionejs.github.io/sweetandsari/index.html)
+- [Run App](https://bacionejs.github.io/sweetandsari/sweetandsari.html)
 
 ## Installation
 - Download [sweetandsari.html](https://raw.githubusercontent.com/bacionejs/sweetandsari/main/sweetandsari.html)
