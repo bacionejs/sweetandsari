@@ -63,85 +63,143 @@ const initialData=[
 ];
 
 let db;
+
+
+
 document.addEventListener('DOMContentLoaded', () => {
-clearDB().then(() => initDB());
+  checkDB().then(exists => {
+    if (exists) {
+      showMessage('You need to clear the database first from the main application.');
+    } else {
+      initDB();
+    }
+  });
 });
-function clearDB() {
-return new Promise((resolve, reject) => {
-const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
-deleteRequest.onsuccess = () => resolve();
-deleteRequest.onerror = () => {
-alert('Error deleting database.');
-reject();
-};
-deleteRequest.onblocked = () => {
-alert('Database deletion blocked. Close all connections and try again.');
-reject();
-};
-});
+
+function checkDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME);
+    let versionChange = false;
+    request.onupgradeneeded = () => {
+      versionChange = true;
+    };
+    request.onsuccess = e => {
+      const db = e.target.result;
+      if (versionChange) {
+        db.close();
+        resolve(false); // If the DB was upgraded, no need to check
+        return;
+      }
+      if (db.objectStoreNames.contains(INVENTORY_STORE) && db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
+        const tx = db.transaction([INVENTORY_STORE, TRANSACTIONS_STORE], 'readonly');
+        const invStore = tx.objectStore(INVENTORY_STORE).count();
+        const txnStore = tx.objectStore(TRANSACTIONS_STORE).count();
+        let hasRecords = false;
+        let completed = 0;
+        invStore.onsuccess = () => {
+          if (invStore.result > 0) hasRecords = true;
+          checkCompletion();
+        };
+        txnStore.onsuccess = () => {
+          if (txnStore.result > 0) hasRecords = true;
+          checkCompletion();
+        };
+        function checkCompletion() {
+          if (++completed === 2) resolve(hasRecords);
+        }
+      } else {
+        resolve(false);
+      }
+    };
+    request.onerror = () => {
+      showMessage('Error opening database.');
+      reject();
+    };
+  });
 }
+
 function initDB() {
-const request = indexedDB.open(DB_NAME);
-request.onupgradeneeded = e => {
-db = e.target.result;
-if (!db.objectStoreNames.contains(INVENTORY_STORE)) {
-const store = db.createObjectStore(INVENTORY_STORE, {keyPath: 'name'});
-initialData.forEach(item => store.add(item));
+  const request = indexedDB.open(DB_NAME, 1);
+  request.onupgradeneeded = e => {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains(INVENTORY_STORE)) {
+      db.createObjectStore(INVENTORY_STORE, { keyPath: 'name' });
+    }
+    if (!db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
+      db.createObjectStore(TRANSACTIONS_STORE, { autoIncrement: true });
+    }
+    if (!db.objectStoreNames.contains(LOG_STORE)) {
+      db.createObjectStore(LOG_STORE, { autoIncrement: true });
+    }
+  };
+  request.onsuccess = e => {
+    db = e.target.result;
+    populateInventoryIfNeeded();
+  };
+  request.onerror = () => showMessage('Error opening database.');
 }
-if (!db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
-db.createObjectStore(TRANSACTIONS_STORE, {autoIncrement: true});
+
+function populateInventoryIfNeeded() {
+  const tx = db.transaction(INVENTORY_STORE, 'readonly');
+  const store = tx.objectStore(INVENTORY_STORE);
+  const countRequest = store.count();
+  countRequest.onsuccess = () => {
+    if (countRequest.result === 0) {
+      const writeTx = db.transaction(INVENTORY_STORE, 'readwrite');
+      const writeStore = writeTx.objectStore(INVENTORY_STORE);
+      initialData.forEach(item => writeStore.add(item));
+      writeTx.oncomplete = () => {
+        showMessage('Inventory initialized with 50 items.');
+        generateTransactions(); // Add this line to create transactions after inventory
+      };
+    } else {
+      showMessage('Inventory already exists.');
+      generateTransactions(); // If inventory exists, go ahead and generate transactions
+    }
+  };
 }
-if (!db.objectStoreNames.contains(LOG_STORE)) {
-db.createObjectStore(LOG_STORE, {autoIncrement: true});
-}
-};
-request.onsuccess = e => {
-db = e.target.result;
-generateTransactions();
-};
-request.onerror = () => alert('Error opening database.');
-}
-function generateTransactions() {
-const tx = db.transaction(TRANSACTIONS_STORE, 'readwrite');
-const store = tx.objectStore(TRANSACTIONS_STORE);
-for (let i = 0; i < 500; i++) {
-const item = initialData[Math.floor(Math.random() * initialData.length)];
-const qty = Math.floor(Math.random() * 10) + 1;
-const type = Math.random() < 0.5 ? 'buy' : 'sell';
-const timestamp = generateRandomTimestamp();
-store.add({
-item: item.name,
-cost: item.cost,
-price: item.price,
-quantity: qty,
-type: type,
-timestamp: timestamp
-});
-}
-tx.oncomplete=()=>{
- let msg=document.getElementById('message');
- if(!msg){
-  msg=document.createElement('p');
-  msg.id='message';
-  document.body.appendChild(msg);
- }
- msg.textContent='Generated 50 inventory items and 500 transactions.';
-};
-}
+
 function generateRandomTimestamp() {
-const now = new Date();
-const pastDate = new Date(now);
-pastDate.setFullYear(now.getFullYear() - 3);
-const randomTime = pastDate.getTime() + Math.random() * (now.getTime() - pastDate.getTime());
-const date = new Date(randomTime);
-const year = date.getFullYear();
-const month = String(date.getMonth() + 1).padStart(2, '0');
-const day = String(date.getDate()).padStart(2, '0');
-const hours = String(date.getHours()).padStart(2, '0');
-const minutes = String(date.getMinutes()).padStart(2, '0');
-const seconds = String(date.getSeconds()).padStart(2, '0');
-return `${year}${month}${day}${hours}${minutes}${seconds}`;
+  const start = new Date();
+  start.setMonth(start.getMonth() - 3);
+  const end = new Date();
+  return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime())).toISOString();
 }
+
+function generateTransactions() {
+  const tx = db.transaction(TRANSACTIONS_STORE, 'readwrite');
+  const store = tx.objectStore(TRANSACTIONS_STORE);
+  for (let i = 0; i < 500; i++) {
+    const item = initialData[Math.floor(Math.random() * initialData.length)];
+    const qty = Math.floor(Math.random() * 10) + 1;
+    const type = Math.random() < 0.5 ? 'buy' : 'sell';
+    const timestamp = generateRandomTimestamp();
+    store.add({
+      item: item.name,
+      cost: item.cost,
+      price: item.price,
+      quantity: qty,
+      type: type,
+      timestamp: timestamp
+    });
+  }
+  tx.oncomplete = () => showMessage('Generated 50 inventory items and 500 transactions.');
+}
+
+function showMessage(msg) {
+  let message = document.getElementById('message');
+  if (!message) {
+    message = document.createElement('p');
+    message.id = 'message';
+    document.body.appendChild(message);
+  }
+  message.textContent = msg;
+}
+
+
+
+
+
 </script>
   
 <script>
