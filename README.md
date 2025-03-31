@@ -24,4 +24,4 @@ Sweet and Sari is a Retail Management System (RMS) for a school project which in
 - **Sort**: For low stock
 
 ## Limitations
-- **Data**: Data is stored in the browser cache and will be deleted if you delete browsing data.
+- **Data**: Data will be deleted if you delete browsing data.
