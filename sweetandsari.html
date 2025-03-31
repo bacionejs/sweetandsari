@@ -94,12 +94,8 @@ function initDB() {
 const request = indexedDB.open(DB_NAME);
 request.onupgradeneeded = e => {
   db = e.target.result;
-  if (!db.objectStoreNames.contains(STORE)) {
-    db.createObjectStore(STORE, { keyPath: 'name' });
-  }
-  if (!db.objectStoreNames.contains(LOG)) {
-    db.createObjectStore(LOG, { autoIncrement: true });
-  }
+  if (!db.objectStoreNames.contains(STORE)) { db.createObjectStore(STORE, { keyPath: 'name' }); }
+  if (!db.objectStoreNames.contains(LOG)) { db.createObjectStore(LOG, { autoIncrement: true }); }
 };
 request.onsuccess = e => {
   db = e.target.result;
@@ -109,31 +105,31 @@ request.onerror = () => alert('Error loading database.');
 }
 
 function createtabs(parent){
- let buttons=element('div',parent,'MasterButtons');
- let tabs=element('div',parent,'MasterTabs');
- ['Buy','Sell','Reports','Database'].forEach(tab=>{element('button',buttons,tab+'btn',tab,()=>showMaster(tab));});
- createBuyTable(tabs);
- createSellTable(tabs);
- element('div',tabs,'Reports').className='tab';
- let dbTab=element('div',tabs,'Database');
- dbTab.className='tab';
- element('p',dbTab,null,'Warning: This will clear all data from Sweet and Sari.');
- element('button',dbTab,null,'Clear Data',clearStores);
+let buttons=element('div',parent,'MasterButtons');
+let tabs=element('div',parent,'MasterTabs');
+['Buy','Sell','Reports','Database'].forEach(tab=>{element('button',buttons,tab+'btn',tab,()=>showMaster(tab));});
+createBuyTable(tabs);
+createSellTable(tabs);
+element('div',tabs,'Reports').className='tab';
+let dbTab=element('div',tabs,'Database');
+dbTab.className='tab';
+element('p',dbTab,null,'Warning: This will clear all data from Sweet and Sari.');
+element('button',dbTab,null,'Clear Data',clearStores);
 }
 
 function clearStores(){
- const req=indexedDB.open('bacionejs.sweetandsari');
- req.onsuccess=(e)=>{
+const req=indexedDB.open('DB_NAME');
+req.onsuccess=(e)=>{
   const db=e.target.result;
-  const tx=db.transaction(['inventory','transactions'],'readwrite');
-  const invStore=tx.objectStore('inventory');
-  const txnStore=tx.objectStore('transactions');
-  invStore.clear().onsuccess=()=>console.log('inventory cleared.');
-  txnStore.clear().onsuccess=()=>console.log('transactions cleared.');
+  const tx=db.transaction([STORE,LOG],'readwrite');
+  const invStore=tx.objectStore(STORE);
+  const txnStore=tx.objectStore(LOG);
+  invStore.clear().onsuccess=()=>console.log(STORE+' cleared.');
+  txnStore.clear().onsuccess=()=>console.log(LOG+' cleared.');
   tx.oncomplete=()=>alert('Data cleared successfully.');
- };
- req.onerror=()=>alert('Error opening database.');
- req.onupgradeneeded=()=>alert('Database not found.');
+};
+req.onerror=()=>alert('Error opening database.');
+req.onupgradeneeded=()=>alert('Database not found.');
 }
 
 function toggle(parent,r){
@@ -217,6 +213,7 @@ summary.innerHTML='Current Inventory Cost: <span id="buyTotalCost">0.00</span><b
 createTable(tab,'buyTable',['Item','Cost','Price','Stock','Qty','']);
 const btnContainer=element('div',tab);
 btnContainer.style.display='flex';btnContainer.style.flexWrap='wrap';btnContainer.style.gap='5px';
+btnContainer.style.marginTop='10px';
 ['newItemName','newItemCost','newItemPrice','newItemStock'].forEach(id=>{const input=element('input',btnContainer,id);input.placeholder=id.replace('newItem','');input.style.flex='1';input.style.minWidth='100px';});
 element('button',btnContainer,'','New',addNewItem);
 }
@@ -227,18 +224,18 @@ const cost=parseFloat(document.getElementById('newItemCost').value);
 const price=parseFloat(document.getElementById('newItemPrice').value);
 const stock=parseInt(document.getElementById('newItemStock').value);
 if(!name||isNaN(cost)||isNaN(price)||isNaN(stock)){
-alert('Invalid input. Please check values.');
-return;
+  alert('Invalid input. Please check values.');
+  return;
 }
 const store=db.transaction(STORE,'readwrite').objectStore(STORE);
 store.add({name,cost,price,stock}).onsuccess=()=>{
-logTransaction(name,cost,price,stock,'buy');
-loadBuy();
-['newItemName','newItemCost','newItemPrice','newItemStock'].forEach(id=>{document.getElementById(id).value='';});
-const totalCost=parseFloat(document.querySelector('#buyTotalCost').textContent)||0;
-const potentialProfit=parseFloat(document.querySelector('#buyDiff').textContent)||0;
-document.querySelector('#buyTotalCost').textContent=(totalCost+cost*stock).toFixed(2);
-document.querySelector('#buyDiff').textContent=(potentialProfit+(price-cost)*stock).toFixed(2);
+  logTransaction(name,cost,price,stock,'buy');
+  loadBuy();
+  ['newItemName','newItemCost','newItemPrice','newItemStock'].forEach(id=>{document.getElementById(id).value='';});
+  const totalCost=parseFloat(document.querySelector('#buyTotalCost').textContent)||0;
+  const potentialProfit=parseFloat(document.querySelector('#buyDiff').textContent)||0;
+  document.querySelector('#buyTotalCost').textContent=(totalCost+cost*stock).toFixed(2);
+  document.querySelector('#buyDiff').textContent=(potentialProfit+(price-cost)*stock).toFixed(2);
 };
 }
 
@@ -485,12 +482,14 @@ const table=createTable(parent,'transactionsTable',['Item','Time','Amount']);
 const tbody=table.querySelector('tbody');
 data.sort((a,b)=>b.timestamp-a.timestamp);
 data.forEach(t=>{
-const row=element('tr',tbody);
-const time=t.timestamp.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1-$2-$3 $4:$5:$6');
-const amount=(t.type==='buy')?(-t.cost*t.quantity).toFixed(2):(t.price*t.quantity).toFixed(2);
-element('td',row,null,t.item);
-element('td',row,null,time);
-element('td',row,null,amount).style.color=amount<0?'red':'green';
+  const row=element('tr',tbody);
+  const time=t.timestamp.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1-$2-$3 $4:$5:$6');
+  const amount=(t.type==='buy')?(-t.cost*t.quantity).toFixed(2):(t.price*t.quantity).toFixed(2);
+  element('td',row,null,t.item);
+  element('td',row,null,time);
+  let a=element('td',row,null,amount);
+  a.style.color=amount<0?'red':'green';
+  a.style.backgroundColor='#fff8e1';
 });
 }
 
@@ -518,30 +517,30 @@ const headerRow=element('tr',thead);
 headers.forEach(v=>{if(v)element('th',headerRow,null,v);});
 const itemIndex=[...headerRow.children].findIndex(th=>th.textContent==='Item');
 if(itemIndex!==-1){
-const itemTh=headerRow.children[itemIndex];
-itemTh.textContent='';
-const input=element('input',itemTh);
-input.placeholder='Item Filter';
-input.oninput=()=>filter(table,itemIndex,input.value.toLowerCase());
+  const itemTh=headerRow.children[itemIndex];
+  itemTh.textContent='';
+  const input=element('input',itemTh);
+  input.placeholder='Item Filter';
+  input.oninput=()=>filter(table,itemIndex,input.value.toLowerCase());
 }
 const tbody=element('tbody',table);
 const grouped=by(data,groupKeys);
 const rows=[];
 function processGroup(grouped,keys,prefix=''){
-for(const key in grouped){
-const current=grouped[key];
-if(Array.isArray(current)){
-rows.push(sum(current,prefix+key));
-}else{
-processGroup(current,keys.slice(1),prefix+key+'-');
-}
-}
+  for(const key in grouped){
+    const current=grouped[key];
+    if(Array.isArray(current)){
+      rows.push(sum(current,prefix+key));
+    }else{
+      processGroup(current,keys.slice(1),prefix+key+'-');
+    }
+  }
 }
 processGroup(grouped,groupKeys);
 rows.sort((a,b)=>b[0]<a[0]?-1:1);
 rows.forEach(rowData=>{
-const row=element('tr',tbody);
-rowData.forEach(v=>{if(v)element('td',row,null,v);});
+  const row=element('tr',tbody);
+  rowData.forEach(v=>{if(v)element('td',row,null,v);});
 });
 }
 
