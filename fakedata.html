@@ -61,7 +61,7 @@ for (let i = 0; i < 500; i++) {
     timestamp: timestamp
   });
 }
-tx.oncomplete = () => showMessage('Generated 50 inventory items and 500 transactions.');
+tx.oncomplete = () => showMessage('Generated example data: 50 inventory items and 500 transactions.');
 }
 
 function generateRandomTimestamp() {
@@ -86,7 +86,7 @@ if (!message) {
   message.id = 'message';
   document.body.appendChild(message);
 }
-message.textContent = msg;
+message.textContent = msg+" Loading Sweet & Sari...";
 }
 
 
