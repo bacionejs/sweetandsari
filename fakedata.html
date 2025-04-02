@@ -3,13 +3,95 @@
 <head>
 <title>Generate Transactions</title>
 <script>
-const DB_NAME = 'bacionejs.sweetandsari';
-const TRANSACTIONS_STORE = 'transactions';
-const INVENTORY_STORE = 'inventory';
-const LOG_STORE = 'log';
+const DB_NAME = 'bacionejs.sweetandsari30';
+const STORE = 'inventory';
+const LOG = 'log';
 
-//const initialData=Array.from({length:50},(_,i)=>({name:`Chocolate ${i+1}`,cost:1+(i%5)*0.1,price:1.5+(i%5)*0.5,stock:50+((i*10)%100)}));
-const initialData=[
+let db;
+const initialData=getdata();
+document.addEventListener('DOMContentLoaded', () => { initDB(); });
+
+function initDB() {
+const request = indexedDB.open(DB_NAME);
+request.onupgradeneeded = e => {
+  db = e.target.result;
+  if (!db.objectStoreNames.contains(STORE)) { db.createObjectStore(STORE, { keyPath: 'name' }); }
+  if (!db.objectStoreNames.contains(LOG)) { db.createObjectStore(LOG, {keyPath: 'id', autoIncrement: true}); }
+};
+request.onsuccess = e => {
+  db = e.target.result;
+  populateInventoryIfNeeded();
+};
+request.onerror = () => alert('Error loading database.');
+}
+
+
+function populateInventoryIfNeeded() {
+const tx = db.transaction(STORE, 'readonly');
+const store = tx.objectStore(STORE);
+const countRequest = store.count();
+countRequest.onsuccess = () => {
+  if (countRequest.result === 0) {
+    const writeTx = db.transaction(STORE, 'readwrite');
+    const writeStore = writeTx.objectStore(STORE);
+    initialData.forEach(item => writeStore.add(item));
+    writeTx.oncomplete = () => {
+      generateTransactions();
+    };
+  } else {
+    showMessage('Data already exists.');
+  }
+};
+}
+
+function generateTransactions() {
+const tx = db.transaction(LOG, 'readwrite');
+const store = tx.objectStore(LOG);
+for (let i = 0; i < 500; i++) {
+  const item = initialData[Math.floor(Math.random() * initialData.length)];
+  const qty = Math.floor(Math.random() * 10) + 1;
+  const type = Math.random() < 0.5 ? 'Buy' : 'Sell';
+  const timestamp = generateRandomTimestamp();
+  store.add({
+    item: item.name,
+    cost: item.cost,
+    price: item.price,
+    quantity: qty,
+    type: type,
+    timestamp: timestamp
+  });
+}
+tx.oncomplete = () => showMessage('Generated 50 inventory items and 500 transactions.');
+}
+
+function generateRandomTimestamp() {
+const now = new Date();
+const pastDate = new Date(now);
+pastDate.setFullYear(now.getFullYear() - 3);
+const randomTime = pastDate.getTime() + Math.random() * (now.getTime() - pastDate.getTime());
+const date = new Date(randomTime);
+const year = date.getFullYear();
+const month = String(date.getMonth() + 1).padStart(2, '0');
+const day = String(date.getDate()).padStart(2, '0');
+const hours = String(date.getHours()).padStart(2, '0');
+const minutes = String(date.getMinutes()).padStart(2, '0');
+const seconds = String(date.getSeconds()).padStart(2, '0');
+return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+function showMessage(msg) {
+let message = document.getElementById('message');
+if (!message) {
+  message = document.createElement('p');
+  message.id = 'message';
+  document.body.appendChild(message);
+}
+message.textContent = msg;
+}
+
+
+function getdata(){
+return [
 {name:"Milk Chocolate Bar",cost:1,price:1.5,stock:50},
 {name:"Dark Chocolate Bar",cost:1.1,price:2,stock:60},
 {name:"White Chocolate Bar",cost:1.2,price:2.2,stock:70},
@@ -61,150 +143,7 @@ const initialData=[
 {name:"Hot Cocoa",cost:1.2,price:2.5,stock:75},
 {name:"Affogato",cost:1.3,price:2.8,stock:55}
 ];
-
-let db;
-
-
-
-document.addEventListener('DOMContentLoaded', () => {
-checkDB().then(exists => {
-  if (exists) {
-    showMessage('You need to clear the database first from the main application.');
-  } else {
-    initDB();
-  }
-});
-});
-
-function checkDB() {
-return new Promise((resolve, reject) => {
-  const request = indexedDB.open(DB_NAME);
-  let versionChange = false;
-  request.onupgradeneeded = () => {
-    versionChange = true;
-  };
-  request.onsuccess = e => {
-    const db = e.target.result;
-    if (versionChange) {
-      db.close();
-      resolve(false); // If the DB was upgraded, no need to check
-      return;
-    }
-    if (db.objectStoreNames.contains(INVENTORY_STORE) && db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
-      const tx = db.transaction([INVENTORY_STORE, TRANSACTIONS_STORE], 'readonly');
-      const invStore = tx.objectStore(INVENTORY_STORE).count();
-      const txnStore = tx.objectStore(TRANSACTIONS_STORE).count();
-      let hasRecords = false;
-      let completed = 0;
-      invStore.onsuccess = () => {
-        if (invStore.result > 0) hasRecords = true;
-        checkCompletion();
-      };
-      txnStore.onsuccess = () => {
-        if (txnStore.result > 0) hasRecords = true;
-        checkCompletion();
-      };
-      function checkCompletion() {
-        if (++completed === 2) resolve(hasRecords);
-      }
-    } else {
-      resolve(false);
-    }
-  };
-  request.onerror = () => {
-    showMessage('Error opening database.');
-    reject();
-  };
-});
 }
-
-function initDB() {
-const request = indexedDB.open(DB_NAME, 1);
-request.onupgradeneeded = e => {
-  db = e.target.result;
-  if (!db.objectStoreNames.contains(INVENTORY_STORE)) {
-    db.createObjectStore(INVENTORY_STORE, { keyPath: 'name' });
-  }
-  if (!db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
-    db.createObjectStore(TRANSACTIONS_STORE, { autoIncrement: true });
-  }
-  if (!db.objectStoreNames.contains(LOG_STORE)) {
-    db.createObjectStore(LOG_STORE, { autoIncrement: true });
-  }
-};
-request.onsuccess = e => {
-  db = e.target.result;
-  populateInventoryIfNeeded();
-};
-request.onerror = () => showMessage('Error opening database.');
-}
-
-function populateInventoryIfNeeded() {
-const tx = db.transaction(INVENTORY_STORE, 'readonly');
-const store = tx.objectStore(INVENTORY_STORE);
-const countRequest = store.count();
-countRequest.onsuccess = () => {
-  if (countRequest.result === 0) {
-    const writeTx = db.transaction(INVENTORY_STORE, 'readwrite');
-    const writeStore = writeTx.objectStore(INVENTORY_STORE);
-    initialData.forEach(item => writeStore.add(item));
-    writeTx.oncomplete = () => {
-      showMessage('Inventory initialized with 50 items.');
-      generateTransactions(); // Add this line to create transactions after inventory
-    };
-  } else {
-    showMessage('Inventory already exists.');
-    generateTransactions(); // If inventory exists, go ahead and generate transactions
-  }
-};
-}
-
-function generateRandomTimestamp() {
-const now = new Date();
-const pastDate = new Date(now);
-pastDate.setFullYear(now.getFullYear() - 3);
-const randomTime = pastDate.getTime() + Math.random() * (now.getTime() - pastDate.getTime());
-const date = new Date(randomTime);
-const year = date.getFullYear();
-const month = String(date.getMonth() + 1).padStart(2, '0');
-const day = String(date.getDate()).padStart(2, '0');
-const hours = String(date.getHours()).padStart(2, '0');
-const minutes = String(date.getMinutes()).padStart(2, '0');
-const seconds = String(date.getSeconds()).padStart(2, '0');
-return `${year}${month}${day}${hours}${minutes}${seconds}`;
-}
-
-function generateTransactions() {
-const tx = db.transaction(TRANSACTIONS_STORE, 'readwrite');
-const store = tx.objectStore(TRANSACTIONS_STORE);
-for (let i = 0; i < 500; i++) {
-  const item = initialData[Math.floor(Math.random() * initialData.length)];
-  const qty = Math.floor(Math.random() * 10) + 1;
-  const type = Math.random() < 0.5 ? 'buy' : 'sell';
-  const timestamp = generateRandomTimestamp();
-  store.add({
-    item: item.name,
-    cost: item.cost,
-    price: item.price,
-    quantity: qty,
-    type: type,
-    timestamp: timestamp
-  });
-}
-tx.oncomplete = () => showMessage('Generated 50 inventory items and 500 transactions.');
-}
-
-function showMessage(msg) {
-let message = document.getElementById('message');
-if (!message) {
-  message = document.createElement('p');
-  message.id = 'message';
-  document.body.appendChild(message);
-}
-message.textContent = msg;
-}
-
-
 
 
 
@@ -219,6 +158,5 @@ if(urlParams.get('redirect')==='true'){
 
 </head>
 <body>
-<h2>Generating fake data...</h2>
 </body>
 </html>
