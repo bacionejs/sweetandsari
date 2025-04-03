@@ -8,7 +8,7 @@ alert(`Error: ${msg} at ${line}:${col}`);
 return true;
 };
 
-let DB_NAME="bacionejs.sweetandsari30";
+let DB_NAME="bacionejs.sweetandsari31";
 let STORE="inventory";
 let LOG="log";
 let cart={};
@@ -50,76 +50,6 @@ dbTab.className="tab";
 element("p",dbTab,null,"Warning: This will clear all data from Sweet and Sari.");
 element("button",dbTab,null,"Clear Data",clearStores);
 }
-
-function createraw(tabname){
-let tab=document.getElementById(tabname);
-const STORES = {
-  log: {
-    fields: ["item", "cost", "price", "quantity", "type", "timestamp"],
-    keyPath: "id",
-    autoIncrement: true,
-    sortFunction: (a, b) => b.timestamp - a.timestamp
-  },
-  inventory: {
-    fields: ["name", "cost", "price", "stock"],
-    keyPath: "name",
-    autoIncrement: false,
-    sortFunction: (a, b) => a.name.localeCompare(b.name)
-  }
-};
-let currentStore = tabname.toLowerCase();
-let storeConfig = STORES[currentStore];
-renderTable();
-
-function addNew(table) {
-let tr = element("tr",table); 
-storeConfig.fields.forEach(_ => {
-  let input = element("input",element("td",tr)); 
-  input.style.width="90%";
-});
-element("button",element("td",tr),"",'\u{2795}',()=>{let o={};  store("readwrite").add(fields(o,tr)).onsuccess=renderTable;  });//create
-}
-
-function renderTable() {
-tab.innerHTML="";
-let container=element("div",tab);
-container.style.maxHeight="50vh";
-container.style.overflowY="auto";
-container.style.border="1px solid #ccc";
-container.style.position="relative";
-let table = element("table",container); 
-table.style.width="auto";
-let header = element("tr",table); 
-storeConfig.fields.forEach(f => { element("th",header).textContent = f; });
-element("th",header).textContent = "";
-addNew(table);
-store("readonly").getAll().onsuccess = e => { e.target.result.sort(storeConfig.sortFunction).forEach(row => addRow(table, row)); };//read
-}
-
-function addRow(table, data) {
-let tr = element("tr",table); 
-storeConfig.fields.forEach(f => {
-  let input = element("input",element("td",tr)); 
-  input.value = data[f] || '';
-  input.style.width="90%";
-  input.oninput=()=>{let o={[storeConfig.keyPath]:data[storeConfig.keyPath]};  store("readwrite").put(fields(o,tr));  };//update
-});
-element("button",element("td",tr),"","\u{274C}",() => { store("readwrite").delete(data[storeConfig.keyPath]).onsuccess = renderTable; });//delete
-}
-
-function fields(o,tr){
-storeConfig.fields.forEach((f,i)=>{
-  let v=tr.children[i].firstChild.value;  
-  o[f]=isNaN(v)?v:v.includes('.')?parseFloat(v):parseInt(v);  
-});
-return o;
-}
-
-function store(type){
-return db.transaction(currentStore, type).objectStore(currentStore);
-}
-
-}//end createraw
 
 function createTransaction(tabname){
 let tab=document.getElementById(tabname);
@@ -314,6 +244,106 @@ for(let t of data){if(t.type==="Buy")buySum+=t.cost*t.quantity;else transactionS
 return [label,buySum.toFixed(2),transactionSum.toFixed(2),(transactionSum-buySum).toFixed(2)];
 }
 
+
+
+
+
+
+
+
+
+
+function createraw(tabname){
+let tab=document.getElementById(tabname);
+let currentStore=tabname.toLowerCase();
+let settings,columns,keyPath;
+
+store("readonly").openCursor().onsuccess=e=>{
+let cursor=e.target.result;
+if(cursor && cursor.value){
+  let objectStore=store("readonly");
+  keyPath=objectStore.keyPath || 'id';
+  let isAutoIncrement=objectStore.autoIncrement;
+  columns=Object.keys(cursor.value).filter(f=>!(isAutoIncrement && f===keyPath));
+  settings={columns,sortField:"id",sortOrder:"asc",keyPath};
+  renderTable(tab);
+}else{
+  console.warn("Norecordsfoundtodeterminecolumns.");
+}
+};
+
+function addNew(table){
+let tr=element("tr",table);
+columns.forEach(_=>{element("td",tr).contentEditable=true;});
+element("button",element("td",tr),"",'\u{2795}',()=>{let o={};store("readwrite").add(parseRow(o,tr)).onsuccess=()=>renderTable(table.parentNode);});//create
+}
+
+function renderTable(tab){
+tab.innerHTML="";
+let container=element("div",tab);
+container.style.maxHeight="50vh";
+container.style.overflowY="auto";
+container.style.border="1px solid #ccc";
+container.style.position="relative";
+let table=element("table",container);
+table.style.width="auto";
+let header=element("tr",table);
+columns.forEach(col=>{element("button",element("th",header),col,col,()=>toggleSort(col));});
+element("th",header).textContent="";
+addNew(table);
+store("readonly").getAll().onsuccess=e=>{let data=e.target.result;sortData(data);data.forEach(r=>row(table,r));};//read
+}
+
+function row(table,data){
+let tr=element("tr",table);
+columns.forEach(col=>{
+  let input=element("td",tr);
+  input.contentEditable=true;
+  input.textContent=data[col] || '';
+  input.onblur=()=>{let o={[keyPath]:data[keyPath]};store("readwrite").put(parseRow(o,tr));};//update
+});
+element("button",element("td",tr),"","\u{274C}",()=>{store("readwrite").delete(data[keyPath]).onsuccess=()=>renderTable(table.parentNode);});//delete
+}
+
+function toggleSort(field){
+settings.sortOrder=settings.sortField===field?(settings.sortOrder==="asc"?"desc":"asc"):"asc";
+settings.sortField=field;
+renderTable(tab);
+}
+
+function sortData(data){
+data.sort((a,b)=>{
+  let valA=a[settings.sortField],valB=b[settings.sortField];
+  if(typeof valA==="number" && typeof valB==="number"){
+    return settings.sortOrder==="asc"?valA-valB:valB-valA;
+  }
+  return settings.sortOrder==="asc"?String(valA).localeCompare(String(valB)):String(valB).localeCompare(String(valA));
+});
+}
+
+function parseRow(o,tr){
+columns.forEach((col,i)=>{
+  let v=tr.children[i].textContent;
+  o[col]=isNaN(v)?v:v.includes('.')?parseFloat(v):parseInt(v);
+});
+return o;
+}
+
+function store(type){
+return db.transaction(currentStore,type).objectStore(currentStore);
+}
+
+}//endcreateraw
+
+
+
+
+
+
+
+
+
+
 function log(item,cost,price,quantity,type){
 let store=db.transaction(LOG,"readwrite").objectStore(LOG);
 let time=new Date();
@@ -374,15 +404,15 @@ headers.forEach(v=>{element("th",headerRow).textContent=v;});
 createfilter(table);
 let stockIndex=[...headerRow.children].findIndex(th=>th.textContent==="Stock");
 if(stockIndex!==-1){
-let stockTh=headerRow.children[stockIndex];
-stockTh.style.cursor="pointer";
-stockTh.innerHTML="Stock &#x25B2;";
-let ascending=true;
-stockTh.onclick=()=>{
-sortTable(table,stockIndex,ascending);
-stockTh.innerHTML=ascending?"Stock &#x25BC;":"Stock &#x25B2;";
-ascending=!ascending;
-};
+  let stockTh=headerRow.children[stockIndex];
+  stockTh.style.cursor="pointer";
+  stockTh.innerHTML="Stock &#x25B2;";
+  let ascending=true;
+  stockTh.onclick=()=>{
+    sortTable(table,stockIndex,ascending);
+    stockTh.innerHTML=ascending?"Stock &#x25B2;":"Stock &#x25BC;";
+    ascending=!ascending;
+  };
 }
 element("tbody",table);
 return table;
@@ -493,7 +523,6 @@ input {
 `;
 }
 
-//  padding: 8px;
 function element(tag,parent,id,text,listener){
 let e;
 if(parent) e=parent.appendChild(document.createElement(tag));
