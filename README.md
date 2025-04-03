@@ -17,12 +17,11 @@ Sweet and Sari is a Retail Management System (RMS) for a school project which in
 - Reopen `sweetandsari.html`
 
 ## Features
+- **Inventory**: Sort, create, read, update, delete
 - **Purchases**: Cart and Purchase form    
 - **Sales**: Cart and Sales form
 - **Reports**: Transactions, Items, Daily, Monthly, Yearly, Summary
 - **Filters**: Show results as you type
-- **Sort**: For low stock
-- **Database**: Create, read, update, delete
 
 ## Limitations
 - **Data**: Data will be deleted if you delete browsing data.
