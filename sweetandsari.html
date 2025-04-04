@@ -81,7 +81,7 @@ element("tbody",table);
 return table;
 }
 
-function getstore(s,type){
+function getstore(s,type="readonly"){
 return db.transaction(s,type).objectStore(s);
 }
 
@@ -89,7 +89,7 @@ function loadTransaction(type){
 document.getElementById("paymentForm").style.display="none";
 let tbody=document.querySelector("#transactionTable tbody");
 tbody.innerHTML="";
-getstore(STORE,"readonly").openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
+getstore(STORE).openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
   let item=cursor.value;
   let row=element("tr",tbody);
   ["name","cost","price","stock"].forEach(field=>element("td",row,"",item[field]));
@@ -127,7 +127,7 @@ tx.oncomplete=()=>{
 }
 
 function updateTransaction(name,qty,type){
-getstore(STORE,"readonly").get(name).onsuccess=e=>{let item=e.target.result;if(item){
+getstore(STORE).get(name).onsuccess=e=>{let item=e.target.result;if(item){
   let subtotal;
   if(type=="Buy")subtotal=qty*item.cost;else subtotal=qty*item.price;
   if(qty>0){
@@ -164,7 +164,7 @@ let e=document.getElementById(tab);
 e.innerHTML="";
 new Promise((resolve)=>{
   let data=[];
-  getstore(LOG,"readonly").openCursor().onsuccess=e=>{
+  getstore(LOG).openCursor().onsuccess=e=>{
   let cursor=e.target.result;
   if(cursor){
     let t=cursor.value;
@@ -344,7 +344,7 @@ return db.transaction(currentStore,"readwrite").objectStore(currentStore);
 
 
 function log(item,cost,price,quantity,type){
-let store=db.transaction(LOG,"readwrite").objectStore(LOG);
+let store=getstore(LOG,"readwrite");
 let time=new Date();
 let timestamp="FullYear Month Date Hours Minutes Seconds".split(" ").reduce((s,i)=>s+((time["get"+i]()+(i=="Month")).toString().padStart(2,"0")),"");
 store.add({
@@ -373,17 +373,8 @@ if(tab==="Reports")createReports(tab);
 }
 
 function clearStores(){
-let req=indexedDB.open(DB_NAME);
-req.onsuccess=(e)=>{
-  let tx=e.target.result.transaction([STORE,LOG],"readwrite");
-  let invStore=tx.objectStore(STORE);
-  let txnStore=tx.objectStore(LOG);
-  invStore.clear().onsuccess=()=>console.log(STORE+" cleared.");
-  txnStore.clear().onsuccess=()=>console.log(LOG+" cleared.");
-  tx.oncomplete=()=>alert("Data cleared successfully.");
-};
-req.onerror=()=>alert("Error opening database.");
-req.onupgradeneeded=()=>alert("Database not found.");
+getstore(STORE,"readwrite").clear();
+getstore(LOG,"readwrite").clear();
 }
 
 function minusplus(name,change,type){
