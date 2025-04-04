@@ -64,12 +64,32 @@ element("button",form,"","Cancel",cancelPayment);
 loadTransaction(tabname);
 }
 
+function createTable(parent,id,headers){
+let con=element("div",parent);
+con.style.maxHeight="50vh";
+con.style.overflowY="auto";
+con.style.border="1px solid #ccc";
+let table=element("table",con,id);
+let thead=element("thead",table);
+thead.style.position="sticky";
+thead.style.top="0";
+thead.style.backgroundColor="#f1f1f1";
+let headerRow=element("tr",thead);
+headers.forEach(v=>{element("th",headerRow).textContent=v;});
+createfilter(table);
+element("tbody",table);
+return table;
+}
+
+function getstore(s,type){
+return db.transaction(s,type).objectStore(s);
+}
+
 function loadTransaction(type){
-let store=db.transaction(STORE,"readonly").objectStore(STORE);
-let tbody=document.querySelector("#transactionTable tbody");
 document.getElementById("paymentForm").style.display="none";
+let tbody=document.querySelector("#transactionTable tbody");
 tbody.innerHTML="";
-store.openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
+getstore(STORE,"readonly").openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
   let item=cursor.value;
   let row=element("tr",tbody);
   ["name","cost","price","stock"].forEach(field=>element("td",row,"",item[field]));
@@ -83,8 +103,7 @@ store.openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
   input.max=item.stock;
   input.style.width="3ch";
   input.addEventListener("input",()=>updateTransaction(item.name,parseInt(input.value),type));
-  let plus=element("button",td,"","+",()=>minusplus(item.name,1,type));
-  plus.className="small-btn";
+  element("button",td,"","+",()=>minusplus(item.name,1,type)).className="small-btn";
   cursor.continue();
 }};
 }
@@ -93,11 +112,11 @@ function processPayment(type){
 let tx=db.transaction(STORE,"readwrite");
 let store=tx.objectStore(STORE);
 Object.values(cart).forEach(item=>{store.get(item.name).onsuccess=e=>{
-  let dbItem=e.target.result;
-  if(dbItem){
-    dbItem.stock+=(type=="Buy"?1:-1)*item.qty;
-    store.put(dbItem);
-    log(item.name,dbItem.cost,item.price,item.qty,type);
+  let dbitem=e.target.result;
+  if(dbitem){
+    dbitem.stock+=(type=="Buy"?1:-1)*item.qty;
+    store.put(dbitem);
+    log(item.name,item.cost,item.price,item.qty,type);
   }
 };});
 tx.oncomplete=()=>{
@@ -108,7 +127,7 @@ tx.oncomplete=()=>{
 }
 
 function updateTransaction(name,qty,type){
-db.transaction(STORE,"readonly").objectStore(STORE).get(name).onsuccess=e=>{let item=e.target.result;if(item){
+getstore(STORE,"readonly").get(name).onsuccess=e=>{let item=e.target.result;if(item){
   let subtotal;
   if(type=="Buy")subtotal=qty*item.cost;else subtotal=qty*item.price;
   if(qty>0){
@@ -135,16 +154,27 @@ let tab=document.getElementById(tabname);
 tab.innerHTML="";
 let buttons=element("div",tab,"ReportButtons");
 let tabs=element("div",tab,"ReportTabs");
-["Transactions","Items","Daily","Monthly","Yearly","Summary"].forEach(tab=>{element("button",buttons,tab+"btn",tab,()=>showReport(tab));});
-["Transactions","Items","Daily","Monthly","Yearly","Summary"].forEach(tab=>{element("div",tabs,tab,"").className="tab";});
-showReport("Transactions");
+["Items","Daily","Monthly","Yearly","Summary"].forEach(tab=>{element("button",buttons,tab+"btn",tab,()=>showReport(tab));});
+["Items","Daily","Monthly","Yearly","Summary"].forEach(tab=>{element("div",tabs,tab,"").className="tab";});
+showReport("Items");
 }
 
 function showReport(tab){
 let e=document.getElementById(tab);
 e.innerHTML="";
-loadReportData().then(data=>{
-  if(tab==="Transactions") transactionsreport(e,data);
+new Promise((resolve)=>{
+  let data=[];
+  getstore(LOG,"readonly").openCursor().onsuccess=e=>{
+  let cursor=e.target.result;
+  if(cursor){
+    let t=cursor.value;
+    let ts=t.timestamp.toString();
+    data.push({timestamp:ts,all:"",year:ts.slice(0,4),month:ts.slice(4,6),day:ts.slice(6,8),item:t.item,cost:t.cost,price:t.price,quantity:t.quantity,type:t.type});
+    cursor.continue();
+  }else{
+    resolve(data);
+  }};
+}).then(data=>{
   if(tab==="Items")     group(e,data,["Item","Buy","Sell","Profit"],["item"]);
   if(tab==="Daily")     group(e,data,[" "   ,"Buy","Sell","Profit"],["year","month","day"]);
   if(tab==="Monthly")   group(e,data,[" "   ,"Buy","Sell","Profit"],["year","month"]);
@@ -154,38 +184,15 @@ loadReportData().then(data=>{
 toggle("Report",tab)
 }
 
-function loadReportData(){
-return new Promise((resolve,reject)=>{
-let data=[],store=db.transaction(LOG,"readonly").objectStore(LOG);
-store.openCursor().onsuccess=e=>{
-let cursor=e.target.result;
-if(cursor){
-  let t=cursor.value;
-  let ts=t.timestamp.toString();
-  data.push({timestamp:ts,all:"",year:ts.slice(0,4),month:ts.slice(4,6),day:ts.slice(6,8),item:t.item,cost:t.cost,price:t.price,quantity:t.quantity,type:t.type});
-  cursor.continue();
-}else{
-  resolve(data);
-}};
-store.openCursor().onerror=e=>reject(e);
-});
-}
-
-function transactionsreport(parent,data){
-if(!data.length)return;
-let table=createTable(parent,"transactionsTable",["Item","Time","Amount"]);
-let tbody=table.querySelector("tbody");
-data.sort((a,b)=>b.timestamp-a.timestamp);
-data.forEach(t=>{
-  let row=element("tr",tbody);
-  let time=t.timestamp.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/,"$1-$2-$3 $4:$5:$6");
-  let amount=(t.type==="Buy")?(-t.cost*t.quantity).toFixed(2):(t.price*t.quantity).toFixed(2);
-  element("td",row,null,t.item);
-  element("td",row,null,time);
-  let a=element("td",row,null,amount);
-  a.style.color=amount<0?"red":"green";
-  a.style.backgroundColor="#fff8e1";
-});
+function createfilter(table){
+let tr=table.querySelector("thead tr");
+let i=[...tr.children].findIndex(th=>th.textContent==="Item");
+if(i==-1)return;
+let th=tr.children[i];
+th.textContent="";
+let box=element("input",th);
+box.placeholder="Item Filter";
+box.oninput=()=>[...table.querySelector("tbody").children].forEach(tr=>{tr.style.display=tr.children[i].textContent.toLowerCase().includes(box.value)?"":"none";});
 }
 
 function group(parent,data,headers,groupKeys){
@@ -193,17 +200,9 @@ let table=element("table",parent);
 table.style.height="50vh";
 table.style.overflowY="auto";
 table.style.display="block";
-let thead=element("thead",table);
-let headerRow=element("tr",thead);
-headers.forEach(v=>{if(v)element("th",headerRow,null,v);});
-let itemIndex=[...headerRow.children].findIndex(th=>th.textContent==="Item");
-if(itemIndex!==-1){
-  let itemTh=headerRow.children[itemIndex];
-  itemTh.textContent="";
-  let input=element("input",itemTh);
-  input.placeholder="Item Filter";
-  input.oninput=()=>filter(table,itemIndex,input.value.toLowerCase());
-}
+let tr=element("tr",element("thead",table));
+headers.forEach(v=>{if(v)element("th",tr,null,v);});
+createfilter(table);
 let tbody=element("tbody",table);
 let grouped=by(data,groupKeys);
 let rows=[];
@@ -218,7 +217,10 @@ function processGroup(grouped,keys,prefix=""){
   }
 }
 processGroup(grouped,groupKeys);
-rows.sort((a,b)=>b[0]<a[0]?-1:1);
+if(/^[-\d]+$/.test(rows[0][0]))
+  rows.sort((a,b)=>b[0]<a[0]?-1:1);//decending
+else
+  rows.sort((a,b)=>b[0]<a[0]?1:-1);//ascending
 rows.forEach(rowData=>{
   let row=element("tr",tbody);
   rowData.forEach(v=>{if(v)element("td",row,null,v);});
@@ -258,24 +260,22 @@ let tab=document.getElementById(tabname);
 let currentStore=tabname.toLowerCase();
 let settings,columns,keyPath;
 
-store("readonly").openCursor().onsuccess=e=>{
-let cursor=e.target.result;
-if(cursor && cursor.value){
-  let objectStore=store("readonly");
-  keyPath=objectStore.keyPath || 'id';
-  let isAutoIncrement=objectStore.autoIncrement;
-  columns=Object.keys(cursor.value).filter(f=>!(isAutoIncrement && f===keyPath));
-  settings={columns,sortField:"id",sortOrder:"asc",keyPath};
-  renderTable(tab);
-}else{
-  console.warn("Norecordsfoundtodeterminecolumns.");
-}
+store().openCursor().onsuccess=e=>{
+  let cursor=e.target.result;
+  if(cursor && cursor.value){
+    let objectStore=store();
+    keyPath=objectStore.keyPath || 'id';
+    let isAutoIncrement=objectStore.autoIncrement;
+    columns=Object.keys(cursor.value).filter(f=>!(isAutoIncrement && f===keyPath));
+    settings={columns,sortField:"id",sortOrder:"asc",keyPath};
+    renderTable(tab);
+  }
 };
 
 function addNew(table){
 let tr=element("tr",table);
 columns.forEach(_=>{element("td",tr).contentEditable=true;});
-element("button",element("td",tr),"",'\u{2795}',()=>{let o={};store("readwrite").add(parseRow(o,tr)).onsuccess=()=>renderTable(table.parentNode);});//create
+element("button",element("td",tr),"","+",()=>{let o={};store().add(parseRow(o,tr)).onsuccess=()=>renderTable(table.parentNode);}).style.color="lime";//create
 }
 
 function renderTable(tab){
@@ -289,9 +289,8 @@ let table=element("table",container);
 table.style.width="auto";
 let header=element("tr",table);
 columns.forEach(col=>{element("button",element("th",header),col,col,()=>toggleSort(col));});
-element("th",header).textContent="";
 addNew(table);
-store("readonly").getAll().onsuccess=e=>{let data=e.target.result;sortData(data);data.forEach(r=>row(table,r));};//read
+store().getAll().onsuccess=e=>{let data=e.target.result;sortData(data);data.forEach(r=>row(table,r));};//read
 }
 
 function row(table,data){
@@ -300,9 +299,9 @@ columns.forEach(col=>{
   let input=element("td",tr);
   input.contentEditable=true;
   input.textContent=data[col] || '';
-  input.onblur=()=>{let o={[keyPath]:data[keyPath]};store("readwrite").put(parseRow(o,tr));};//update
+  input.onblur=()=>{let o={[keyPath]:data[keyPath]};store().put(parseRow(o,tr));};//update
 });
-element("button",element("td",tr),"","\u{274C}",()=>{store("readwrite").delete(data[keyPath]).onsuccess=()=>renderTable(table.parentNode);});//delete
+element("button",element("td",tr),"","x",()=>{store().delete(data[keyPath]).onsuccess=()=>renderTable(table.parentNode);}).style.color="red";//delete
 }
 
 function toggleSort(field){
@@ -329,8 +328,8 @@ columns.forEach((col,i)=>{
 return o;
 }
 
-function store(type){
-return db.transaction(currentStore,type).objectStore(currentStore);
+function store(){
+return db.transaction(currentStore,"readwrite").objectStore(currentStore);
 }
 
 }//endcreateraw
@@ -356,66 +355,6 @@ store.add({
   type,
   timestamp
 });
-}
-
-function sortTable(table,col,ascending){
-let tbody=table.querySelector("tbody");
-[...tbody.children].sort((a,b)=>{
-let valA=parseFloat(a.children[col].textContent)||0;
-let valB=parseFloat(b.children[col].textContent)||0;
-return ascending?valA-valB:valB-valA;
-}).forEach(row=>tbody.appendChild(row));
-}
-
-function createfilter(table){
-let thead=table.querySelector("thead");
-let headerRow=thead.querySelector("tr");
-let itemIndex=[...headerRow.children].findIndex(th=>th.textContent==="Item");
-if(itemIndex==-1)return;
-let itemTh=headerRow.children[itemIndex];
-itemTh.textContent="";
-let input=element("input",itemTh);
-input.placeholder="Item Filter";
-input.oninput=()=>filter(table,itemIndex,input.value.toLowerCase());
-}
-
-function filter(table,col,value){
-let tbody=table.querySelector("tbody");
-[...tbody.children].forEach(tr=>{let cell=tr.children[col].textContent.toLowerCase();tr.style.display=cell.includes(value)?"":"none";});
-}
-
-function createTable(parent,id,headers){
-let container=element("div",parent);
-container.style.maxHeight="50vh";
-container.style.overflowY="auto";
-container.style.border="1px solid #ccc";
-container.style.position="relative";
-let table=element("table",container,id);
-table.style.width="100%";
-table.style.borderCollapse="collapse";
-table.style.position="relative";
-let thead=element("thead",table);
-thead.style.position="sticky";
-thead.style.top="0";
-thead.style.backgroundColor="#f1f1f1";
-thead.style.zIndex="10";
-let headerRow=element("tr",thead);
-headers.forEach(v=>{element("th",headerRow).textContent=v;});
-createfilter(table);
-let stockIndex=[...headerRow.children].findIndex(th=>th.textContent==="Stock");
-if(stockIndex!==-1){
-  let stockTh=headerRow.children[stockIndex];
-  stockTh.style.cursor="pointer";
-  stockTh.innerHTML="Stock &#x25B2;";
-  let ascending=true;
-  stockTh.onclick=()=>{
-    sortTable(table,stockIndex,ascending);
-    stockTh.innerHTML=ascending?"Stock &#x25B2;":"Stock &#x25BC;";
-    ascending=!ascending;
-  };
-}
-element("tbody",table);
-return table;
 }
 
 function toggle(parent,tab){
@@ -449,11 +388,11 @@ req.onupgradeneeded=()=>alert("Database not found.");
 
 function minusplus(name,change,type){
 let input=document.getElementById(`transactionQty-${name}`);
-let newQty=parseInt(input.value||0)+change;
-if(newQty<0)newQty=0;
-if(newQty>parseInt(input.max))newQty=parseInt(input.max);
-input.value=newQty;
-updateTransaction(name,newQty,type);
+let qty=parseInt(input.value||0)+change;
+if(qty<0)qty=0;
+if(qty>parseInt(input.max))qty=parseInt(input.max);
+input.value=qty;
+updateTransaction(name,qty,type);
 }
 
 function cancelPayment(){
