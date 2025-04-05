@@ -8,8 +8,8 @@ alert(`Error: ${msg} at ${line}:${col}`);
 return true;
 };
 
-let DB_NAME="bacionejs.sweetandsari31";
-let STORE="inventory";
+let DB="bacionejs.sweetandsari31";
+let INVENTORY="inventory";
 let LOG="log";
 let cart={};
 let db;
@@ -23,10 +23,10 @@ createtabs(con);
 initDB();
 
 function initDB(){
-let request=indexedDB.open(DB_NAME);
+let request=indexedDB.open(DB);
 request.onupgradeneeded=e=>{
   db=e.target.result;
-  if(!db.objectStoreNames.contains(STORE)){db.createObjectStore(STORE,{keyPath:"name"});}
+  if(!db.objectStoreNames.contains(INVENTORY)){db.createObjectStore(INVENTORY,{keyPath:"name"});}
   if(!db.objectStoreNames.contains(LOG)){db.createObjectStore(LOG,{keyPath: 'id', autoIncrement: true});}
 };
 request.onsuccess=e=>{
@@ -76,47 +76,52 @@ thead.style.top="0";
 thead.style.backgroundColor="#f1f1f1";
 let headerRow=element("tr",thead);
 headers.forEach(v=>{element("th",headerRow).textContent=v;});
-createfilter(table);
+createItemFilter(table);
 element("tbody",table);
 return table;
-}
-
-function getstore(s,type="readonly"){
-return db.transaction(s,type).objectStore(s);
 }
 
 function loadTransaction(type){
 document.getElementById("paymentForm").style.display="none";
 let tbody=document.querySelector("#transactionTable tbody");
 tbody.innerHTML="";
-getstore(STORE).openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
-  let item=cursor.value;
+getstore(INVENTORY).openCursor().onsuccess=e=>{let cursor=e.target.result;if(cursor){
+  let d=cursor.value;
   let row=element("tr",tbody);
-  ["name","cost","price","stock"].forEach(field=>element("td",row,"",item[field]));
+  ["name","cost","price","stock"].forEach(field=>element("td",row,"",d[field]));
   let td=element("td",row);
-  let minus=element("button",td,"","-",()=>minusplus(item.name,-1,type));
+  let minus=element("button",td,"","-",()=>minusplus(d.name,-1,type));
   minus.className="small-btn";
-  let input=element("input",td,`transactionQty-${item.name}`);
+  let input=element("input",td,`transactionQty-${d.name}`);
   input.type="number";
   input.value=0;
   input.min=0;
-  input.max=item.stock;
+  input.max=d.stock;
   input.style.width="3ch";
-  input.addEventListener("input",()=>updateTransaction(item.name,parseInt(input.value),type));
-  element("button",td,"","+",()=>minusplus(item.name,1,type)).className="small-btn";
+  input.addEventListener("input",()=>updateTransaction(d.name,parseInt(input.value),type));
+  element("button",td,"","+",()=>minusplus(d.name,1,type)).className="small-btn";
   cursor.continue();
 }};
 }
 
 function processPayment(type){
-let tx=db.transaction(STORE,"readwrite");
-let store=tx.objectStore(STORE);
-Object.values(cart).forEach(item=>{store.get(item.name).onsuccess=e=>{
-  let dbitem=e.target.result;
-  if(dbitem){
-    dbitem.stock+=(type=="Buy"?1:-1)*item.qty;
-    store.put(dbitem);
-    log(item.name,item.cost,item.price,item.qty,type);
+let tx=db.transaction(INVENTORY,"readwrite");
+let store=tx.objectStore(INVENTORY);
+let time=new Date();
+let ts="FullYear Month Date Hours Minutes Seconds".split(" ").reduce((s,i)=>s+((time["get"+i]()+(i=="Month")).toString().padStart(2,"0")),"");
+Object.values(cart).forEach(c=>{store.get(c.name).onsuccess=e=>{
+  let d=e.target.result;
+  if(d){
+    d.stock+=(type=="Buy"?1:-1)*c.qty;
+    store.put(d);
+    getstore(LOG,"readwrite").add({
+      item:c.name,
+      cost:c.cost,
+      price:c.price,
+      quantity:c.qty,
+      type:type,
+      timestamp:ts
+    });
   }
 };});
 tx.oncomplete=()=>{
@@ -127,7 +132,7 @@ tx.oncomplete=()=>{
 }
 
 function updateTransaction(name,qty,type){
-getstore(STORE).get(name).onsuccess=e=>{let item=e.target.result;if(item){
+getstore(INVENTORY).get(name).onsuccess=e=>{let item=e.target.result;if(item){
   let subtotal;
   if(type=="Buy")subtotal=qty*item.cost;else subtotal=qty*item.price;
   if(qty>0){
@@ -184,7 +189,7 @@ new Promise((resolve)=>{
 toggle("Report",tab)
 }
 
-function createfilter(table){
+function createItemFilter(table){
 let tr=table.querySelector("thead tr");
 let i=[...tr.children].findIndex(th=>th.textContent==="Item");
 if(i==-1)return;
@@ -202,7 +207,7 @@ table.style.overflowY="auto";
 table.style.display="block";
 let tr=element("tr",element("thead",table));
 headers.forEach(v=>{if(v)element("th",tr,null,v);});
-createfilter(table);
+createItemFilter(table);
 let tbody=element("tbody",table);
 let grouped=by(data,groupKeys);
 let rows=[];
@@ -343,20 +348,6 @@ return db.transaction(currentStore,"readwrite").objectStore(currentStore);
 
 
 
-function log(item,cost,price,quantity,type){
-let store=getstore(LOG,"readwrite");
-let time=new Date();
-let timestamp="FullYear Month Date Hours Minutes Seconds".split(" ").reduce((s,i)=>s+((time["get"+i]()+(i=="Month")).toString().padStart(2,"0")),"");
-store.add({
-  item,
-  cost,
-  price,
-  quantity,
-  type,
-  timestamp
-});
-}
-
 function toggle(parent,tab){
 document.querySelectorAll("#"+parent+"Buttons button").forEach(e=>e.classList.remove("active"));
 document.querySelectorAll("#"+parent+"Tabs div").forEach(e=>e.classList.remove("active"));
@@ -373,7 +364,7 @@ if(tab==="Reports")createReports(tab);
 }
 
 function clearStores(){
-getstore(STORE,"readwrite").clear();
+getstore(INVENTORY,"readwrite").clear();
 getstore(LOG,"readwrite").clear();
 }
 
@@ -390,6 +381,10 @@ function cancelPayment(){
 document.getElementById("paymentForm").style.display="none";
 cart={};
 loadTransaction();
+}
+
+function getstore(s,type="readonly"){
+return db.transaction(s,type).objectStore(s);
 }
 
 function getstyles(){
