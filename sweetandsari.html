@@ -170,21 +170,23 @@ e.innerHTML="";
 new Promise((resolve)=>{
   let data=[];
   getstore(LOG).openCursor().onsuccess=e=>{
-  let cursor=e.target.result;
-  if(cursor){
-    let t=cursor.value;
-    let ts=t.timestamp.toString();
-    data.push({timestamp:ts,all:"",year:ts.slice(0,4),month:ts.slice(4,6),day:ts.slice(6,8),item:t.item,cost:t.cost,price:t.price,quantity:t.quantity,type:t.type});
-    cursor.continue();
-  }else{
-    resolve(data);
-  }};
+    let cursor=e.target.result;
+    if(cursor){
+      let t=cursor.value;
+      if(t.type=="Sell"){
+        let ts=t.timestamp.toString();
+        data.push({timestamp:ts,all:"",year:ts.slice(0,4),month:ts.slice(4,6),day:ts.slice(6,8),item:t.item,cost:t.cost,price:t.price,quantity:t.quantity,type:t.type});
+      }
+      cursor.continue();
+    }else{
+      resolve(data);
+    }};
 }).then(data=>{
-  if(tab==="Items")     group(e,data,["Item","Buy","Sell","Profit"],["item"]);
-  if(tab==="Daily")     group(e,data,[" "   ,"Buy","Sell","Profit"],["year","month","day"]);
-  if(tab==="Monthly")   group(e,data,[" "   ,"Buy","Sell","Profit"],["year","month"]);
-  if(tab==="Yearly")    group(e,data,[" "   ,"Buy","Sell","Profit"],["year"]);
-  if(tab==="Summary")   group(e,data,[""    ,"Buy","Sell","Profit"],["all"]);
+  if(tab==="Items")     group(e,data,["Item","Quantity","Revenue","Profit"],["item"]);
+  if(tab==="Daily")     group(e,data,[" "   ,"Quantity","Revenue","Profit"],["year","month","day"]);
+  if(tab==="Monthly")   group(e,data,[" "   ,"Quantity","Revenue","Profit"],["year","month"]);
+  if(tab==="Yearly")    group(e,data,[" "   ,"Quantity","Revenue","Profit"],["year"]);
+  if(tab==="Summary")   group(e,data,[""    ,"Quantity","Revenue","Profit"],["all"]);
 }).catch(err=>{console.error("Error loading data:",err);});
 toggle("Report",tab)
 }
@@ -223,12 +225,12 @@ function processGroup(grouped,keys,prefix=""){
 }
 processGroup(grouped,groupKeys);
 if(/^[-\d]+$/.test(rows[0][0]))
-  rows.sort((a,b)=>b[0]<a[0]?-1:1);//decending
+  rows.sort((a,b)=>b[0]<a[0]?-1:1);//decending date
 else
-  rows.sort((a,b)=>b[0]<a[0]?1:-1);//ascending
-rows.forEach(rowData=>{
+  rows.sort((a,b)=>parseFloat(b[3])<parseFloat(a[3])?1:-1);//ascending profit
+rows.forEach(fields=>{
   let row=element("tr",tbody);
-  rowData.forEach(v=>{if(v)element("td",row,null,v);});
+  fields.forEach(v=>{if(v)element("td",row,null,v);});
 });
 }
 
@@ -246,9 +248,18 @@ return array.reduce((acc,obj)=>{
 }
 
 function sum(data,label){
-let buySum=0,transactionSum=0;
-for(let t of data){if(t.type==="Buy")buySum+=t.cost*t.quantity;else transactionSum+=t.price*t.quantity;}
-return [label,buySum.toFixed(2),transactionSum.toFixed(2),(transactionSum-buySum).toFixed(2)];
+let profit=0,quantity=0,revenue=0;
+for(let t of data){
+  quantity+=t.quantity;
+  revenue+=t.price*t.quantity;
+  profit+=(t.price-t.cost)*t.quantity;
+}
+return [
+  label,
+  quantity,
+  revenue.toFixed(2),
+  profit.toFixed(2)
+];
 }
 
 
