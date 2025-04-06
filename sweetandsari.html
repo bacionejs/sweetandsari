@@ -14,6 +14,9 @@ let LOG="log";
 let cart={};
 let db;
 
+
+
+
 element("style").textContent=getstyles();
 element("div").id="banner";
 let con=element("div");
@@ -58,8 +61,7 @@ let form=element("div",tab,"paymentForm");
 element("h3",form).textContent="Payment Form";
 createTable(form,"paymentSummary",["Name","Cost","Price","Qty","Subtotal"]);
 element("h3",form).innerHTML="Total: $<span id=summaryTotalPrice>0.00</span> | Items: <span id=summaryTotalItems>0</span>";
-element("button",form,"","Process Payment",()=>processPayment(tabname));
-form.appendChild(document.createTextNode(" "));
+element("button",form,"","Process Payment",()=>processPayment(tabname)).style.marginRight="10px";
 element("button",form,"","Cancel",cancelPayment);
 loadTransaction(tabname);
 }
@@ -191,17 +193,6 @@ new Promise((resolve)=>{
 toggle("Report",tab)
 }
 
-function createItemFilter(table){
-let tr=table.querySelector("thead tr");
-let i=[...tr.children].findIndex(th=>th.textContent==="Item");
-if(i==-1)return;
-let th=tr.children[i];
-th.textContent="";
-let box=element("input",th);
-box.placeholder="Item Filter";
-box.oninput=()=>[...table.querySelector("tbody").children].forEach(tr=>{tr.style.display=tr.children[i].textContent.toLowerCase().includes(box.value)?"":"none";});
-}
-
 function group(parent,data,headers,groupKeys){
 let table=element("table",parent);
 table.style.height="50vh";
@@ -225,9 +216,9 @@ function processGroup(grouped,keys,prefix=""){
 }
 processGroup(grouped,groupKeys);
 if(/^[-\d]+$/.test(rows[0][0]))
-  rows.sort((a,b)=>b[0]<a[0]?-1:1);//decending date
+  rows.sort((a,b)=>b[0]<a[0]?-1:1);//date
 else
-  rows.sort((a,b)=>parseFloat(b[3])<parseFloat(a[3])?1:-1);//ascending profit
+  rows.sort((a,b)=>b[3]-a[3]);//profit
 rows.forEach(fields=>{
   let row=element("tr",tbody);
   fields.forEach(v=>{if(v)element("td",row,null,v);});
@@ -358,6 +349,17 @@ return db.transaction(currentStore,"readwrite").objectStore(currentStore);
 
 
 
+
+function createItemFilter(table){
+let tr=table.querySelector("thead tr");
+let i=[...tr.children].findIndex(th=>th.textContent==="Item");
+if(i==-1)return;
+let th=tr.children[i];
+th.textContent="";
+let box=element("input",th);
+box.placeholder="Item Filter";
+box.oninput=()=>[...table.querySelector("tbody").children].forEach(tr=>{tr.style.display=tr.children[i].textContent.toLowerCase().includes(box.value)?"":"none";});
+}
 
 function toggle(parent,tab){
 document.querySelectorAll("#"+parent+"Buttons button").forEach(e=>e.classList.remove("active"));
