@@ -20,7 +20,7 @@ Sweet and Sari is a Retail Management System (RMS) for a school project which in
 - **Inventory**: Create, read, update, delete
 - **Purchases**: Cart and Purchase form    
 - **Sales**: Cart and Sales form
-- **Reports**: Transactions, Items, Daily, Monthly, Yearly, Summary
+- **Reports**: Items, Daily, Monthly, Yearly, Summary
 - **Search**: Filter and sort
 
 ## Limitations
